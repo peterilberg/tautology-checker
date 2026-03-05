@@ -1,2 +1,4 @@
-# tautology-checker
-Laurence Paulson's tautology checker from ML for the Working Programmer in Rust.
+# Tautology checker
+
+Rust implementation of Lawrence Paulson's tautology checker from ML for
+the Working Programmer.

@@ -5,7 +5,9 @@ use std::collections::HashSet;
 use std::fmt;
 use std::rc::Rc;
 
-pub struct Prop(Rc<Proposition>);
+pub struct Prop {
+    prop: Rc<Proposition>,
+}
 
 enum Proposition {
     Atom(String),
@@ -39,14 +41,27 @@ impl Prop {
         let true_atoms = get_atom_names(true_atoms);
         evaluate(self, &true_atoms)
     }
+
+    pub fn is_tautology(&self) -> bool {
+        is_tautology(&cnf(&nnf_positive(self)))
+    }
 }
 
 fn make(p: Proposition) -> Prop {
-    Prop(Rc::new(p))
+    Prop { prop: Rc::new(p) }
 }
 
 fn clone(p: &Prop) -> Prop {
-    Prop(Rc::clone(&p.0))
+    let Prop { prop } = p;
+    let prop = Rc::clone(prop);
+    Prop { prop }
+}
+
+// Utility function because we cannot implement Deref trait on Prop.
+// The target type is private and would have to be exposed.
+fn deref(p: &Prop) -> &Proposition {
+    let Prop { prop } = p;
+    prop.as_ref()
 }
 
 impl fmt::Display for Prop {
@@ -60,22 +75,17 @@ fn fmt_prop(
     precedence: usize,
     f: &mut fmt::Formatter,
 ) -> fmt::Result {
-    let Prop(prop) = prop;
-    match prop.as_ref() {
+    match deref(prop) {
         Proposition::Atom(name) => write!(f, "{}", name),
         Proposition::Negation(prop) => {
             write!(f, "¬")?;
-            fmt_prop(prop, 3, f)
+            fmt_prop(prop, 2, f)
         }
         Proposition::Conjunction(a, b) => {
-            fmt_binary(a, "∧", b, 2, precedence, f)
+            fmt_binary(a, "∧", b, 1, precedence, f)
         }
         Proposition::Disjunction(a, b) => {
-            if let Some(a) = extract_negated_prop(a) {
-                fmt_binary(a, "→", b, 0, precedence, f)
-            } else {
-                fmt_binary(a, "∨", b, 1, precedence, f)
-            }
+            fmt_binary(a, "∨", b, 0, precedence, f)
         }
     }
 }
@@ -101,19 +111,11 @@ fn fmt_binary(
     write!(f, "{}", right)
 }
 
-fn extract_negated_prop(p: &Prop) -> Option<&Prop> {
-    let Prop(prop) = p;
-    match prop.as_ref() {
-        Proposition::Negation(p) => Some(p),
-        _ => None,
-    }
-}
-
 fn get_atom_names<'a>(props: &'a [&Prop]) -> HashSet<&'a str> {
     props
         .iter()
         .filter_map(|prop| {
-            if let Proposition::Atom(name) = prop.0.as_ref() {
+            if let Proposition::Atom(name) = deref(prop) {
                 Some(name.as_str())
             } else {
                 None
@@ -123,8 +125,7 @@ fn get_atom_names<'a>(props: &'a [&Prop]) -> HashSet<&'a str> {
 }
 
 fn evaluate(prop: &Prop, true_atoms: &HashSet<&str>) -> bool {
-    let Prop(prop) = prop;
-    match prop.as_ref() {
+    match deref(prop) {
         Proposition::Atom(name) => true_atoms.contains(name.as_str()),
         Proposition::Negation(prop) => !evaluate(prop, true_atoms),
         Proposition::Conjunction(a, b) => {
@@ -136,27 +137,82 @@ fn evaluate(prop: &Prop, true_atoms: &HashSet<&str>) -> bool {
     }
 }
 
+fn nnf_positive(prop: &Prop) -> Prop {
+    match deref(prop) {
+        Proposition::Atom(_) => clone(prop),
+        Proposition::Negation(prop) => nnf_negative(prop),
+        Proposition::Conjunction(a, b) => nnf_positive(a).and(&nnf_positive(b)),
+        Proposition::Disjunction(a, b) => nnf_positive(a).or(&nnf_positive(b)),
+    }
+}
+
+fn nnf_negative(prop: &Prop) -> Prop {
+    match deref(prop) {
+        Proposition::Atom(_) => prop.not(),
+        Proposition::Negation(prop) => nnf_positive(prop),
+        Proposition::Conjunction(a, b) => nnf_negative(a).or(&nnf_negative(b)),
+        Proposition::Disjunction(a, b) => nnf_negative(a).and(&nnf_negative(b)),
+    }
+}
+
+fn cnf(prop: &Prop) -> Prop {
+    match deref(prop) {
+        Proposition::Conjunction(a, b) => cnf(a).and(&cnf(b)),
+        Proposition::Disjunction(a, b) => distribute(&cnf(a), &cnf(b)),
+        _ => clone(prop),
+    }
+}
+
+// Distribute disjunction p ∨ q into p and q.
+fn distribute(p: &Prop, q: &Prop) -> Prop {
+    match (deref(p), deref(q)) {
+        (_p, Proposition::Conjunction(q, r)) => {
+            distribute(p, q).and(&distribute(p, r))
+        }
+        (Proposition::Conjunction(p, r), _q) => {
+            distribute(p, q).and(&distribute(r, q))
+        }
+        _ => p.or(q),
+    }
+}
+
+fn is_tautology(prop: &Prop) -> bool {
+    match deref(prop) {
+        Proposition::Conjunction(a, b) => a.is_tautology() && b.is_tautology(),
+        _ => {
+            let mut positive = HashSet::new();
+            let mut negative = HashSet::new();
+            collect_atoms(prop, &mut positive, &mut negative);
+            !positive.is_disjoint(&negative)
+        }
+    }
+}
+
+fn collect_atoms<'a>(
+    prop: &'a Prop,
+    positive: &mut HashSet<&'a String>,
+    negative: &mut HashSet<&'a String>,
+) {
+    match deref(prop) {
+        Proposition::Atom(name) => {
+            positive.insert(name);
+        }
+        Proposition::Negation(prop) => {
+            if let Proposition::Atom(name) = deref(prop) {
+                negative.insert(name);
+            }
+        }
+        Proposition::Disjunction(a, b) => {
+            collect_atoms(a, positive, negative);
+            collect_atoms(b, positive, negative);
+        }
+        _ => panic!("Proposition must be disjunctive clause in CNF."),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn rich_landed_saintly() {
-        let rich = Prop::atom("rich");
-        let landed = Prop::atom("landed");
-        let saintly = Prop::atom("saintly");
-        let assumption1 = landed.implies(&rich);
-        let assumption2 = saintly.and(&rich).not();
-        let conclusion = landed.implies(&saintly.not());
-
-        assert_eq!(
-            assumption1
-                .and(&assumption2)
-                .implies(&conclusion)
-                .to_string(),
-            "(landed → rich) ∧ ¬(saintly ∧ rich) → landed → ¬saintly"
-        );
-    }
 
     #[test]
     fn no_parentheses_on_different_operator_precedences() {
@@ -270,7 +326,56 @@ mod tests {
     }
 
     #[test]
-    fn the_landed_are_not_saintly() {
+    fn nnf_of_not_saintly_and_rich() {
+        let rich = Prop::atom("rich");
+        let saintly = Prop::atom("saintly");
+        let nnf = nnf_positive(&saintly.and(&rich).not());
+
+        assert_eq!(nnf.to_string(), "¬saintly ∨ ¬rich");
+    }
+
+    #[test]
+    fn distribute_disjunctions() {
+        let rich = Prop::atom("rich");
+        let landed = Prop::atom("landed");
+        let saintly = Prop::atom("saintly");
+        let goal = distribute(&rich.and(&saintly), &landed.and(&rich.not()));
+
+        assert_eq!(
+            goal.to_string(),
+            "(rich ∨ landed) ∧ (saintly ∨ landed) ∧ (rich ∨ ¬rich) ∧ (saintly ∨ ¬rich)"
+        );
+    }
+
+    #[test]
+    fn display_rich_landed_saintly() {
+        assert_eq!(
+            rich_landed_saintly().to_string(),
+            "¬((¬landed ∨ rich) ∧ ¬(saintly ∧ rich)) ∨ ¬landed ∨ ¬saintly"
+        );
+    }
+
+    #[test]
+    fn evaluate_rich_landed_saintly() {
+        let landed = Prop::atom("landed");
+
+        assert!(rich_landed_saintly().evaluate(&[&landed]));
+    }
+
+    #[test]
+    fn cnf_of_rich_landed_saintly() {
+        assert_eq!(
+            cnf(&nnf_positive(&rich_landed_saintly())).to_string(),
+            "(landed ∨ saintly ∨ ¬landed ∨ ¬saintly) ∧ (¬rich ∨ saintly ∨ ¬landed ∨ ¬saintly) ∧ (landed ∨ rich ∨ ¬landed ∨ ¬saintly) ∧ (¬rich ∨ rich ∨ ¬landed ∨ ¬saintly)"
+        );
+    }
+
+    #[test]
+    fn are_the_landed_saintly() {
+        assert!(rich_landed_saintly().is_tautology());
+    }
+
+    fn rich_landed_saintly() -> Prop {
         let rich = Prop::atom("rich");
         let landed = Prop::atom("landed");
         let saintly = Prop::atom("saintly");
@@ -278,11 +383,6 @@ mod tests {
         let assumption2 = saintly.and(&rich).not();
         let conclusion = landed.implies(&saintly.not());
 
-        assert!(
-            assumption1
-                .and(&assumption2)
-                .implies(&conclusion)
-                .evaluate(&[&landed])
-        );
+        assumption1.and(&assumption2).implies(&conclusion)
     }
 }

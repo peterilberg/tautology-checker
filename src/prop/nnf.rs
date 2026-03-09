@@ -1,6 +1,7 @@
 use super::types::*;
 
 impl Prop {
+    /// Calculate the negated normal form of a proposition.
     pub fn nnf(&self) -> Prop {
         positive(self)
     }

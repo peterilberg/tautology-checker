@@ -4,6 +4,8 @@ use std::collections::HashSet;
 use std::str;
 
 impl Prop {
+    /// Evaluate a proposition under the assumption that the atoms in
+    /// `true_atoms` are true.
     #[allow(dead_code)]
     pub fn evaluate(&self, true_atoms: &[&Prop]) -> bool {
         let true_atoms = get_atoms(true_atoms);
@@ -20,6 +22,7 @@ fn eval(prop: &Prop, true_atoms: &HashSet<&str>) -> bool {
     }
 }
 
+// Extract the names from atomic propositions.
 fn get_atoms<'a>(props: &'a [&Prop]) -> HashSet<&'a str> {
     props
         .iter()

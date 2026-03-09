@@ -1,8 +1,9 @@
 use std::ops::Deref;
 use std::rc::Rc;
 
+/// Propositions.
 pub struct Prop {
-    prop: Rc<Term>,
+    prop: Rc<Term>, // Directed acyclic graph of terms.
 }
 
 pub enum Term {
@@ -13,22 +14,27 @@ pub enum Term {
 }
 
 impl Prop {
+    /// Create an atom from `name`.
     pub fn atom(name: &str) -> Prop {
         Prop::new(Term::Atom(name.to_owned()))
     }
 
+    /// Negate a proposition.
     pub fn not(&self) -> Prop {
         Prop::new(Term::Negation(self.clone()))
     }
 
+    /// Join a proposition with another one `p` in a conjuction.
     pub fn and(&self, p: &Prop) -> Prop {
         Prop::new(Term::Conjunction(self.clone(), p.clone()))
     }
 
+    /// Join a proposition with another one `p` in a conjuction.
     pub fn or(&self, p: &Prop) -> Prop {
         Prop::new(Term::Disjunction(self.clone(), p.clone()))
     }
 
+    /// Form an implication from this proposition to the conclusion `p`.
     pub fn implies(&self, p: &Prop) -> Prop {
         self.not().or(p)
     }

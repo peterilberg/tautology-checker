@@ -1,22 +1,29 @@
+//! Parser combinators.
+
 use std::str::Chars;
 
-#[derive(Clone)]
-pub struct Input<'a> {
-    posn: usize,
-    next: Option<char>,
-    rest: Chars<'a>,
-}
-
-pub type Output<'a, Value> = (Input<'a>, Value);
-
-pub struct Error {
-    pub position: usize,
-    pub message: String,
-}
-
+/// Parsers read input and return the remaining input and a value.
 pub type Parser<Value> =
     for<'a> fn(Input<'a>) -> Result<Output<'a, Value>, Error>;
 
+/// The input to a parser.
+#[derive(Clone)]
+pub struct Input<'a> {
+    posn: usize,        // Offset into input string.
+    next: Option<char>, // The next character from the input string.
+    rest: Chars<'a>,    // The remaining characters in the input.
+}
+
+/// The output of a parser consists of the remaining input and a value.
+pub type Output<'a, Value> = (Input<'a>, Value);
+
+/// Parser errors.
+pub struct Error {
+    pub position: usize, // Offset of the error in the input string.
+    pub message: String, // Description of the error.
+}
+
+/// Parse the input `test` with `parser`.
 pub fn parse<Value>(text: &str, parser: Parser<Value>) -> Result<Value, Error> {
     let mut rest = text.chars();
     let (_, value) = parser(Input {
@@ -27,6 +34,7 @@ pub fn parse<Value>(text: &str, parser: Parser<Value>) -> Result<Value, Error> {
     Ok(value)
 }
 
+/// Accept the specified value, that is, always succeed with `value`.
 pub fn accept<'a, Value>(
     input: Input<'a>,
     value: Value,
@@ -34,6 +42,7 @@ pub fn accept<'a, Value>(
     Ok((input, value))
 }
 
+/// Reject the input with the provided explanation `message`.
 pub fn reject<'a, Value>(
     input: Input<'a>,
     message: &str,
@@ -44,6 +53,8 @@ pub fn reject<'a, Value>(
     })
 }
 
+/// Accept the next character in the input if it passes `test`, otherwise
+/// reject the input.
 pub fn expect<'a>(
     input: Input<'a>,
     test: fn(char) -> bool,
@@ -66,6 +77,7 @@ pub fn expect<'a>(
     }
 }
 
+/// Expect the end of input.
 pub fn end_of_input<'a>(input: Input<'a>) -> Result<Output<'a, ()>, Error> {
     match input.next {
         None => accept(input, ()),
@@ -73,6 +85,9 @@ pub fn end_of_input<'a>(input: Input<'a>) -> Result<Output<'a, ()>, Error> {
     }
 }
 
+/// Parse `input` with `parsers`, one after another. Accept the first
+/// result from the first parser that succeeds. Reject the input with
+/// `description` if none of them succeed.
 pub fn choose<'a, Value>(
     input: Input<'a>,
     parsers: &[Parser<Value>],
@@ -87,6 +102,8 @@ pub fn choose<'a, Value>(
     reject(input, &format!("expected {description}"))
 }
 
+/// Parse `input` as many times as possible with `parser`.
+/// Collect the results in a vector.
 pub fn repeat<'a, Value>(
     input: Input<'a>,
     parser: Parser<Value>,

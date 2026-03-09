@@ -16,6 +16,7 @@ impl FromStr for Prop {
     }
 }
 
+// top_level ::= proposition EOI
 fn top_level<'a>(input: Input<'a>) -> Result<Output<'a, Prop>, Error> {
     let (input, ()) = skip_spaces(input)?;
     let (input, proposition) = proposition(input)?;
@@ -23,6 +24,7 @@ fn top_level<'a>(input: Input<'a>) -> Result<Output<'a, Prop>, Error> {
     accept(input, proposition)
 }
 
+// proposition ::= expression { implication }
 fn proposition<'a>(input: Input<'a>) -> Result<Output<'a, Prop>, Error> {
     let (input, expression) = expression(input)?;
     let (input, rest) = repeat(input, implication)?;
@@ -34,6 +36,7 @@ fn proposition<'a>(input: Input<'a>) -> Result<Output<'a, Prop>, Error> {
     accept(input, result)
 }
 
+// implication ::= '->' expression
 fn implication<'a>(input: Input<'a>) -> Result<Output<'a, Prop>, Error> {
     let (input, _) = expect(input, |c| c == '-', "-")?;
     let (input, _) = expect(input, |c| c == '>', ">")?;
@@ -41,39 +44,48 @@ fn implication<'a>(input: Input<'a>) -> Result<Output<'a, Prop>, Error> {
     expression(input)
 }
 
+// expression ::= term { disjuction }
 fn expression<'a>(input: Input<'a>) -> Result<Output<'a, Prop>, Error> {
     let (input, term) = term(input)?;
     let (input, rest) = repeat(input, disjuction)?;
     accept(input, rest.into_iter().fold(term, |a, b| a.or(&b)))
 }
 
+// disjuction ::= '|' term
 fn disjuction<'a>(input: Input<'a>) -> Result<Output<'a, Prop>, Error> {
     let (input, _) = expect(input, |c| c == '|', "|")?;
     let (input, ()) = skip_spaces(input)?;
     term(input)
 }
 
+// term ::= factor { conjunction }
 fn term<'a>(input: Input<'a>) -> Result<Output<'a, Prop>, Error> {
     let (input, factor) = factor(input)?;
     let (input, rest) = repeat(input, conjuction)?;
     accept(input, rest.into_iter().fold(factor, |a, b| a.and(&b)))
 }
 
+// conjuction ::= '&' factor
 fn conjuction<'a>(input: Input<'a>) -> Result<Output<'a, Prop>, Error> {
     let (input, _) = expect(input, |c| c == '&', "&")?;
     let (input, ()) = skip_spaces(input)?;
     factor(input)
 }
 
+// factor ::= atom
+//         |  negation
+//         |  parentheses
 fn factor<'a>(input: Input<'a>) -> Result<Output<'a, Prop>, Error> {
     choose(input, &[atom, negation, parentheses], "proposition")
 }
 
+// atom ::= word
 fn atom<'a>(input: Input<'a>) -> Result<Output<'a, Prop>, Error> {
     let (input, word) = word(input)?;
     accept(input, Prop::atom(&word))
 }
 
+// negation ::= '~' factor
 fn negation<'a>(input: Input<'a>) -> Result<Output<'a, Prop>, Error> {
     let (input, _) = expect(input, |c| c == '~', "~")?;
     let (input, ()) = skip_spaces(input)?;
@@ -81,6 +93,7 @@ fn negation<'a>(input: Input<'a>) -> Result<Output<'a, Prop>, Error> {
     accept(input, Prop::not(&prop))
 }
 
+// parentheses ::= '(' proposition ')'
 fn parentheses<'a>(input: Input<'a>) -> Result<Output<'a, Prop>, Error> {
     let (input, _) = expect(input, |c| c == '(', "(")?;
     let (input, ()) = skip_spaces(input)?;
@@ -90,6 +103,7 @@ fn parentheses<'a>(input: Input<'a>) -> Result<Output<'a, Prop>, Error> {
     accept(input, prop)
 }
 
+// word ::= letter { letter }
 fn word<'a>(input: Input<'a>) -> Result<Output<'a, String>, Error> {
     let (input, l) = letter(input)?;
     let (input, ls) = repeat(input, letter)?;
@@ -97,15 +111,18 @@ fn word<'a>(input: Input<'a>) -> Result<Output<'a, String>, Error> {
     accept(input, [l].into_iter().chain(ls).collect())
 }
 
+// letter ::= 'a' | .. | 'z' | 'A' | .. | 'Z'
 fn letter<'a>(input: Input<'a>) -> Result<Output<'a, char>, Error> {
     expect(input, |c| c.is_ascii_alphabetic(), "letter")
 }
 
+// skip_spaces ::= { space }
 fn skip_spaces<'a>(input: Input<'a>) -> Result<Output<'a, ()>, Error> {
     let (input, _) = repeat(input, space)?;
     accept(input, ())
 }
 
+// space ::= ' '
 fn space<'a>(input: Input<'a>) -> Result<Output<'a, char>, Error> {
     expect(input, |c| c.is_whitespace(), "whitespace")
 }

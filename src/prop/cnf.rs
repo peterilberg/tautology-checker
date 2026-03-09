@@ -1,6 +1,8 @@
 use super::types::*;
 
 impl Prop {
+    /// Calculate the conjunctive normal form of a proposition.
+    /// The proposition must be in negated normal form.
     pub fn cnf(&self) -> Prop {
         match &**self {
             Term::Conjunction(a, b) => a.cnf().and(&b.cnf()),

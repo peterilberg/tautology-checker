@@ -2,11 +2,13 @@ use super::types::*;
 use std::collections::HashSet;
 
 impl Prop {
+    /// `is_tautology` returns true if the proposition is a is_tautology.
     pub fn is_tautology(&self) -> bool {
         is_tautology(&self.nnf().cnf())
     }
 }
 
+// `prop` must be in conjunctive normal form.
 fn is_tautology(prop: &Prop) -> bool {
     match &**prop {
         Term::Conjunction(a, b) => a.is_tautology() && b.is_tautology(),
@@ -19,6 +21,7 @@ fn is_tautology(prop: &Prop) -> bool {
     }
 }
 
+// Collect positive and negated atoms in a disjunctive clause.
 fn collect_atoms<'a>(
     prop: &'a Prop,
     positive: &mut HashSet<&'a String>,

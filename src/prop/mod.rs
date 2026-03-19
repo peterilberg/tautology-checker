@@ -6,5 +6,4 @@ mod nnf;
 mod tautology;
 mod types;
 
-pub use from_str::Error;
 pub use types::Prop;

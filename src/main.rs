@@ -27,9 +27,9 @@ fn process_one(proposition: &String) -> Result<(), ()> {
             println!("taut: {}", prop.is_tautology());
             Ok(())
         }
-        Err(prop::Error { position, message }) => {
-            println!("pos : {:>width$}", "^", width = position + 1);
-            println!("err : {}", message);
+        Err(error) => {
+            println!("pos : {:>width$}", "^", width = error.offset() + 1);
+            println!("err : {}", error.message());
             Err(())
         }
     }

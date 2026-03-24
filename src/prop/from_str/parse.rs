@@ -1,6 +1,6 @@
 //! Utilities for writing lexers and parsers.
 
-use std::str::CharIndices;
+use unicode_segmentation::{Graphemes, UnicodeSegmentation};
 
 /// `Error` represents an error in the source text.
 /// Error messages must be static strings `&'static str`.
@@ -51,7 +51,11 @@ pub struct CharSource<'string> {
     /// The source string.
     source: &'string str,
     /// An iterator over all characters in the string and their offsets.
-    chars: CharIndices<'string>,
+    chars: Graphemes<'string>,
+    /// The character offset in the source string.
+    offset: usize,
+    /// Indicates if we've reached the end of the source string.
+    is_at_end: bool,
 }
 
 impl<'string> CharSource<'string> {
@@ -59,29 +63,36 @@ impl<'string> CharSource<'string> {
     pub fn new(source: &'string str) -> Self {
         CharSource {
             source,
-            chars: source.char_indices(),
+            chars: source.graphemes(true),
+            offset: 0,
+            is_at_end: false,
         }
     }
 }
 
 impl<'string> Source for CharSource<'string> {
     /// The items of a CharSource are characters.
-    type Item = char;
+    type Item = &'string str;
 
     /// Get the `next` item from the source.
     fn next(&mut self) -> Result<Next<Self::Item>, Error> {
-        let offset = self.chars.offset();
-
         // Calling `Iterator::next()` after reaching the end of the
         // iterator is not defined. Manually check we're done.
-        if offset == self.source.len() {
-            return accept(Next::End(offset));
+        if self.is_at_end {
+            return accept(Next::End(self.offset));
         }
+
         match self.chars.next() {
             // Get the next character if we're not yet at the end.
-            Some((offset, c)) => accept(Next::Value(offset, c)),
+            Some(c) => {
+                self.offset += 1;
+                accept(Next::Value(self.offset - 1, c))
+            }
             // We've reached the end of the string.
-            None => accept(Next::End(offset)),
+            None => {
+                self.is_at_end = true;
+                accept(Next::End(self.offset))
+            }
         }
     }
 }
@@ -241,9 +252,9 @@ mod tests {
     fn char_source_not_empty_string() {
         let mut cs = CharSource::new("abc");
 
-        assert_eq!(cs.next(), accept(Next::Value(0, 'a')));
-        assert_eq!(cs.next(), accept(Next::Value(1, 'b')));
-        assert_eq!(cs.next(), accept(Next::Value(2, 'c')));
+        assert_eq!(cs.next(), accept(Next::Value(0, "a")));
+        assert_eq!(cs.next(), accept(Next::Value(1, "b")));
+        assert_eq!(cs.next(), accept(Next::Value(2, "c")));
         assert_eq!(cs.next(), accept(Next::End(3)));
         assert_eq!(cs.next(), accept(Next::End(3)));
     }
@@ -265,7 +276,7 @@ mod tests {
             .expect("char source should result in valid stream");
 
         assert_eq!(stream.offset(), 0);
-        assert_eq!(stream.item(), Some('a'));
+        assert_eq!(stream.item(), Some("a"));
     }
 
     #[test]
@@ -284,15 +295,15 @@ mod tests {
             .expect("char source should result in valid stream");
 
         assert_eq!(stream.offset(), 0);
-        assert_eq!(stream.item(), Some('a'));
+        assert_eq!(stream.item(), Some("a"));
         assert_eq!(stream.advance(), accept(()));
 
         assert_eq!(stream.offset(), 1);
-        assert_eq!(stream.item(), Some('b'));
+        assert_eq!(stream.item(), Some("b"));
         assert_eq!(stream.advance(), accept(()));
 
         assert_eq!(stream.offset(), 2);
-        assert_eq!(stream.item(), Some('c'));
+        assert_eq!(stream.item(), Some("c"));
         assert_eq!(stream.advance(), accept(()));
 
         assert_eq!(stream.offset(), 3);
@@ -317,25 +328,25 @@ mod tests {
 
         assert_eq!(
             helper_function_for_repeat_macro(&mut scanner),
-            accept(vec!['a', 'b', 'c'])
+            accept(String::from("abc"))
         );
     }
 
     fn helper_function_for_expect_macro(
         scanner: &mut Scanner,
     ) -> Result<(), Error> {
-        expect!(scanner, 'a', "expected 'a'");
-        expect!(scanner, 'b', "expected 'a'");
-        expect!(scanner, 'c', "expected 'a'");
+        expect!(scanner, "a", "expected 'a'");
+        expect!(scanner, "b", "expected 'a'");
+        expect!(scanner, "c", "expected 'a'");
         accept(())
     }
 
     fn helper_function_for_repeat_macro(
         scanner: &mut Scanner,
-    ) -> Result<Vec<char>, Error> {
-        let mut result = Vec::new();
+    ) -> Result<String, Error> {
+        let mut result = String::new();
         repeat!(scanner, ch, {
-            result.push(ch);
+            result.push_str(ch);
         });
         accept(result)
     }

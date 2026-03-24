@@ -1,4 +1,4 @@
-use super::types::*;
+use super::types::{Prop, Term};
 
 use std::collections::HashSet;
 use std::str;

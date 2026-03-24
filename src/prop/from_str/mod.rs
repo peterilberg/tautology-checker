@@ -1,10 +1,10 @@
-use super::types::*;
+use super::types::Prop;
 use std::str::FromStr;
 
 #[macro_use]
 mod parse;
 
-use parse::*;
+use parse::{CharSource, Error, Lexer, Next, Scanner, Source, accept, reject};
 
 impl FromStr for Prop {
     type Err = Error;
@@ -24,6 +24,14 @@ struct TokenSource<'a> {
 impl<'a> TokenSource<'a> {
     fn new(scanner: Scanner<'a>) -> Self {
         TokenSource { scanner }
+    }
+
+    fn is_alphabetic(&self, s: &str) -> bool {
+        s.chars().all(|c| c.is_alphabetic())
+    }
+
+    fn is_whitespace(&self, s: &str) -> bool {
+        s.chars().all(|c| c.is_whitespace())
     }
 }
 
@@ -45,7 +53,7 @@ impl<'a> Source for TokenSource<'a> {
     fn next(&mut self) -> Result<Next<Self::Item>, Error> {
         // skip_spaces ::= { ' ' }
         while let Some(c) = self.scanner.item()
-            && c.is_ascii_whitespace()
+            && self.is_whitespace(c)
         {
             self.scanner.advance()?;
         }
@@ -59,9 +67,9 @@ impl<'a> Source for TokenSource<'a> {
                 match next {
                     // word ::= letter { letter }
                     // letter ::= 'a' | .. | 'z' | 'A' | .. | 'Z'
-                    c if c.is_ascii_alphabetic() => {
+                    c if self.is_alphabetic(c) => {
                         while let Some(c) = self.scanner.item()
-                            && c.is_ascii_alphabetic()
+                            && self.is_alphabetic(c)
                         {
                             self.scanner.advance()?;
                         }
@@ -70,13 +78,13 @@ impl<'a> Source for TokenSource<'a> {
                         accept(Next::Value(start, Token::Name(slice)))
                     }
                     // special ::= '|' | '&' | '~' | '(' | ')' | '->'
-                    '|' => accept(Next::Value(start, Token::Or)),
-                    '&' => accept(Next::Value(start, Token::And)),
-                    '~' => accept(Next::Value(start, Token::Not)),
-                    '(' => accept(Next::Value(start, Token::Open)),
-                    ')' => accept(Next::Value(start, Token::Close)),
-                    '-' => match self.scanner.item() {
-                        Some('>') => {
+                    "|" => accept(Next::Value(start, Token::Or)),
+                    "&" => accept(Next::Value(start, Token::And)),
+                    "~" => accept(Next::Value(start, Token::Not)),
+                    "(" => accept(Next::Value(start, Token::Open)),
+                    ")" => accept(Next::Value(start, Token::Close)),
+                    "-" => match self.scanner.item() {
+                        Some(">") => {
                             self.scanner.advance()?;
                             accept(Next::Value(start, Token::Implies))
                         }

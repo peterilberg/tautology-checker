@@ -1,45 +1,64 @@
-use super::types::*;
-
+use super::types::{Prop, Term};
 use std::fmt;
 use std::str;
 
+mod pretty;
+
+use pretty::Text;
+
 impl fmt::Display for Prop {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        term(self, 0, f)
+        let text = term(self, 0);
+        let width = f.width().unwrap_or(60);
+        let lines = pretty::print(text, width);
+        write!(f, "{}", lines.join("\n"))
     }
 }
 
-fn term(prop: &Prop, precedence: usize, f: &mut fmt::Formatter) -> fmt::Result {
+fn term<'prop>(prop: &'prop Prop, precedence: usize) -> Text<'prop> {
     match &**prop {
-        Term::Atom(name) => write!(f, "{}", name),
+        Term::Atom(name) => Text::string(name),
         Term::Negation(prop) => {
-            write!(f, "¬")?;
-            term(prop, 2, f)
+            // Wrap negated propositions in a block with indentation 1
+            // to account for the "¬" character.
+            Text::block(1, [Text::string("¬"), term(prop, 2)])
         }
-        Term::Conjunction(a, b) => binary(a, "∧", b, 1, precedence, f),
-        Term::Disjunction(a, b) => binary(a, "∨", b, 0, precedence, f),
+        Term::Conjunction(a, b) => binary(a, "∧", b, 1, precedence),
+        Term::Disjunction(a, b) => binary(a, "∨", b, 0, precedence),
     }
 }
 
-fn binary(
-    a: &Prop,
-    op: &str,
-    b: &Prop,
+fn binary<'prop>(
+    a: &'prop Prop,
+    op: &'prop str,
+    b: &'prop Prop,
     level: usize,
     precedence: usize,
-    f: &mut fmt::Formatter,
-) -> fmt::Result {
+) -> Text<'prop> {
     let (left, right) = if precedence <= level {
         ("", "")
     } else {
         ("(", ")")
     };
 
-    write!(f, "{}", left)?;
-    term(a, level, f)?;
-    write!(f, " {} ", op)?;
-    term(b, level, f)?;
-    write!(f, "{}", right)
+    // Wrap the binary operator in a block.
+    Text::block(
+        // Indent by the width of the optional left parenthesis,
+        // so that the right argument aligns with the left one
+        // if there is a link-break.
+        left.len(),
+        [
+            Text::string(left),
+            term(a, level),
+            Text::string(" "),
+            Text::string(op),
+            // Permit line-breaks only between the binary operator
+            // and the right argument.
+            Text::string_or_break(" "),
+            term(b, level),
+            Text::string(right),
+        ],
+    )
 }
 
 #[cfg(test)]
@@ -109,6 +128,22 @@ mod tests {
         assert_eq!(
             rich_landed_saintly().to_string(),
             "¬((¬landed ∨ rich) ∧ ¬(saintly ∧ rich)) ∨ ¬landed ∨ ¬saintly"
+        );
+    }
+
+    #[test]
+    fn display_rich_landed_saintly_narrowly() {
+        let prop = rich_landed_saintly();
+        let text = term(&prop, 0);
+        let lines = pretty::print(text, 30);
+
+        assert_eq!(
+            lines,
+            vec![
+                "¬((¬landed ∨ rich) ∧",
+                "  ¬(saintly ∧ rich)) ∨",
+                "¬landed ∨ ¬saintly"
+            ]
         );
     }
 }

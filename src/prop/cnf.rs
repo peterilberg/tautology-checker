@@ -1,4 +1,4 @@
-use super::types::*;
+use super::types::{Prop, Term};
 
 impl Prop {
     /// Calculate the conjunctive normal form of a proposition.
@@ -41,7 +41,11 @@ mod tests {
 
         assert_eq!(
             goal.to_string(),
-            "(rich ∨ landed) ∧ (saintly ∨ landed) ∧ (rich ∨ ¬rich) ∧ (saintly ∨ ¬rich)"
+            [
+                "(rich ∨ landed) ∧ (saintly ∨ landed) ∧",
+                "(rich ∨ ¬rich) ∧ (saintly ∨ ¬rich)"
+            ]
+            .join("\n")
         );
     }
 
@@ -49,7 +53,13 @@ mod tests {
     fn cnf_of_rich_landed_saintly() {
         assert_eq!(
             rich_landed_saintly().nnf().cnf().to_string(),
-            "(landed ∨ saintly ∨ ¬landed ∨ ¬saintly) ∧ (¬rich ∨ saintly ∨ ¬landed ∨ ¬saintly) ∧ (landed ∨ rich ∨ ¬landed ∨ ¬saintly) ∧ (¬rich ∨ rich ∨ ¬landed ∨ ¬saintly)"
+            [
+                "(landed ∨ saintly ∨ ¬landed ∨ ¬saintly) ∧",
+                "(¬rich ∨ saintly ∨ ¬landed ∨ ¬saintly) ∧",
+                "(landed ∨ rich ∨ ¬landed ∨ ¬saintly) ∧",
+                "(¬rich ∨ rich ∨ ¬landed ∨ ¬saintly)"
+            ]
+            .join("\n")
         );
     }
 }

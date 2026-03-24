@@ -1,4 +1,4 @@
-use super::types::*;
+use super::types::{Prop, Term};
 
 impl Prop {
     /// Calculate the negated normal form of a proposition.

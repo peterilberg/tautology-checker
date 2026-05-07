@@ -11,10 +11,9 @@ fn main() {
 }
 
 fn process_all(propositions: &[String]) -> Result<(), ()> {
-    process_one(&propositions[0])?;
-    for proposition in &propositions[1..] {
-        println!();
+    for proposition in propositions {
         process_one(proposition)?;
+        println!();
     }
     Ok(())
 }
